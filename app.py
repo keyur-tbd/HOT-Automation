@@ -602,8 +602,30 @@ class BlinkitHOTScheduler:
                     sample_duplicates = duplicate_combinations[[po_number_column, item_code_column]].head(5)
                     self.log(f"Sample duplicate combinations: {sample_duplicates.values.tolist()}", "INFO")
                 
-                # Prepare data for update
-                all_values = [headers] + df_cleaned.fillna('').astype(str).values.tolist()
+                # Prepare data preserving formats: strings only for specific columns, numbers for others
+                string_columns = {po_number_column, item_code_column}
+                all_values = [headers]
+                
+                for idx, row in df_cleaned.iterrows():
+                    row_values = []
+                    for col in headers:
+                        val = row[col]
+                        
+                        # Handle NaN/None values
+                        if pd.isna(val):
+                            row_values.append('')
+                        # Force string ONLY for po_number_column and item_code_column
+                        elif col in string_columns:
+                            row_values.append(str(val))
+                        # Preserve original type for ALL other columns
+                        else:
+                            # Keep numeric types as numbers
+                            if isinstance(val, (int, float)):
+                                row_values.append(val)
+                            else:
+                                row_values.append(val)
+                    
+                    all_values.append(row_values)
                 
                 # Clear the entire sheet
                 self.sheets_service.spreadsheets().values().clear(
@@ -611,14 +633,19 @@ class BlinkitHOTScheduler:
                     range=f"{sheet_name}!A:Z"
                 ).execute()
                 
-                # Update with deduplicated data
+                # Update with deduplicated data using USER_ENTERED to preserve formats
                 body = {'values': all_values}
                 self.sheets_service.spreadsheets().values().update(
                     spreadsheetId=spreadsheet_id,
                     range=f"{sheet_name}!A1",
-                    valueInputOption='RAW',  # Use RAW to preserve plain text
+                    valueInputOption='USER_ENTERED',  # Preserve formats
                     body=body
                 ).execute()
+                
+                # Re-apply text format to ONLY po_number_column and item_code_column for data rows
+                self._format_columns_as_text_entire_sheet(
+                    spreadsheet_id, sheet_name, string_columns, len(all_values)
+                )
                 
                 self.log(f"Successfully removed {duplicates_removed} duplicate rows based on {po_number_column} AND {item_code_column}", "SUCCESS")
             else:
@@ -629,6 +656,82 @@ class BlinkitHOTScheduler:
         except Exception as e:
             self.log(f"Failed to remove duplicates by PO and Item: {str(e)}", "ERROR")
             return 0
+    
+    def _format_columns_as_text_entire_sheet(self, spreadsheet_id: str, sheet_name: str, string_columns: set, num_rows: int):
+        """Add apostrophe prefix or format as text to ONLY item_code and po_number columns for the entire sheet's data rows"""
+        try:
+            # Get sheet ID
+            sheet_metadata = self.sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+            sheet_id = None
+            for sheet in sheet_metadata.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+            
+            if sheet_id is None:
+                self.log(f"Could not find sheet ID for {sheet_name}", "WARNING")
+                return
+            
+            # Get headers to find column indices
+            header_result = self.sheets_service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!1:1"
+            ).execute()
+            
+            headers = header_result.get('values', [[]])[0]
+            
+            # Find column indices for string columns (ONLY item_code and po_number)
+            column_indices = []
+            for col_name in string_columns:
+                try:
+                    col_idx = headers.index(col_name)
+                    column_indices.append(col_idx)
+                except ValueError:
+                    self.log(f"Column {col_name} not found in headers", "WARNING")
+                    continue
+            
+            if not column_indices:
+                self.log("No columns to format as text", "INFO")
+                return
+            
+            if num_rows <= 1:
+                self.log("No data rows to format", "INFO")
+                return
+            
+            # Apply text format to specific columns using API for data rows (starting from row 1, 0-indexed)
+            requests = []
+            for col_idx in column_indices:
+                requests.append({
+                    'repeatCell': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'startRowIndex': 1,  # Start from second row (data rows)
+                            'endRowIndex': num_rows,
+                            'startColumnIndex': col_idx,
+                            'endColumnIndex': col_idx + 1
+                        },
+                        'cell': {
+                            'userEnteredFormat': {
+                                'numberFormat': {
+                                    'type': 'TEXT'
+                                }
+                            }
+                        },
+                        'fields': 'userEnteredFormat.numberFormat'
+                    }
+                })
+            
+            if requests:
+                body = {'requests': requests}
+                self.sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                ).execute()
+                
+                self.log(f"Formatted {len(column_indices)} columns as text for entire sheet data", "INFO")
+            
+        except Exception as e:
+            self.log(f"Failed to format columns as text for entire sheet: {str(e)}", "WARNING")
     
     def _extract_attachments_from_email_detailed(self, message_id: str, payload: Dict, sender: str, config: dict, base_folder_id: str) -> Dict[str, int]:
         """Extract attachments from email with detailed tracking"""
