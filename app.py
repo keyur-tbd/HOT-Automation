@@ -63,17 +63,17 @@ class BlinkitHOTScheduler:
             'sender': 'purchaseorder@handsontrades.com',
             'search_term': 'GRN and reconciliation ',
             'days_back': 7,
-            'max_results': 1000,
+            'max_results': 1,
             'gdrive_folder_id': '1pZnVxyPRJWaoYldxvWyXLFxQHbdckZfP'
         }
         
         self.excel_config = {
             'excel_folder_id': '1KM0UGCN4_Z3XLD7nZTMpyM_bKVcsBCOZ',
             'spreadsheet_id': '10wyfALowemBcEFiZP9Tyy08npl_44FpHonO3rKARmRY',
-            'sheet_name': 'hotgrn',
+            'sheet_name': 'test',
             'header_row': 0,
             'days_back': 7,
-            'max_results': 1000,
+            'max_results': 10,
             'source_file_column': 'source_file_name',
             'item_code_column': 'Item_Code',  # Column name for Item_Code
             'po_number_column': 'po_number'   # Column name for PO Number
