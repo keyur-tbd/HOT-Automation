@@ -70,7 +70,7 @@ class BlinkitHOTScheduler:
         self.excel_config = {
             'excel_folder_id': '1KM0UGCN4_Z3XLD7nZTMpyM_bKVcsBCOZ',
             'spreadsheet_id': '10wyfALowemBcEFiZP9Tyy08npl_44FpHonO3rKARmRY',
-            'sheet_name': 'test',
+            'sheet_name': 'hotgrn',
             'header_row': 0,
             'days_back': 7,
             'max_results': 10,
