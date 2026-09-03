@@ -29,6 +29,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 import zipfile
+from etl_alerts import guard
 
 warnings.filterwarnings("ignore")
 
@@ -1479,6 +1480,9 @@ def run_once():
 
 
 if __name__ == "__main__":
+    # Shared disk guard: refuse to write if this pipeline is over its budget
+    # or the volume is full. Emails on warn/stop. Fails open. See etl_alerts.py.
+    guard("grn")
     # For GitHub Actions - always run once
     success = run_once()
     exit_code = 0 if success else 1
