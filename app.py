@@ -63,7 +63,7 @@ class BlinkitHOTScheduler:
         self.gmail_config = {
             'sender': 'purchaseorder@handsontrades.com',
             'search_term': 'GRN and reconciliation ',
-            'days_back': 20,
+            'days_back': 21,
             'max_results': 1000,
             'gdrive_folder_id': '1pZnVxyPRJWaoYldxvWyXLFxQHbdckZfP'
         }
@@ -221,11 +221,18 @@ class BlinkitHOTScheduler:
             self.log(f"Searching Gmail with query: {query}", "INFO")
             
             # Execute search
-            result = self.gmail_service.users().messages().list(
-                userId='me', q=query, maxResults=max_results
-            ).execute()
-            
-            messages = result.get('messages', [])
+            # Gmail returns at most 500 ids per page whatever maxResults says, so a busy
+            # window would silently drop the rest. Page until max_results or the end.
+            messages, page_token = [], None
+            while len(messages) < max_results:
+                result = self.gmail_service.users().messages().list(
+                    userId='me', q=query, pageToken=page_token,
+                    maxResults=min(500, max_results - len(messages))
+                ).execute()
+                messages.extend(result.get('messages', []))
+                page_token = result.get('nextPageToken')
+                if not page_token:
+                    break
             self.log(f"Gmail search returned {len(messages)} messages", "INFO")
             
             return messages
@@ -1328,14 +1335,20 @@ class BlinkitHOTScheduler:
         try:
             start_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%dT00:00:00')
             query = f"'{folder_id}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel') and name contains 'GRN' and trashed=false and modifiedTime > '{start_date}'"
-            results = self.drive_service.files().list(
-                q=query,
-                pageSize=max_results,
-                fields="files(id, name, mimeType)",
-                orderBy="modifiedTime desc"
-            ).execute()
-            
-            files = results.get('files', [])
+            # Drive's default page is 100 files and the cap is 1,000; page to the end.
+            files, page_token = [], None
+            while len(files) < max_results:
+                results = self.drive_service.files().list(
+                    q=query,
+                    pageSize=min(1000, max_results - len(files)),
+                    pageToken=page_token,
+                    fields="nextPageToken, files(id, name, mimeType)",
+                    orderBy="modifiedTime desc"
+                ).execute()
+                files.extend(results.get('files', []))
+                page_token = results.get('nextPageToken')
+                if not page_token:
+                    break
             return files
             
         except Exception as e:
