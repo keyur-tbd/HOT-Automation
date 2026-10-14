@@ -61,7 +61,10 @@ class BlinkitHOTScheduler:
         
         # Hardcoded configs (same as your Streamlit app)
         self.gmail_config = {
-            'sender': 'purchaseorder@handsontrades.com',
+            # Hands On Trades moved their mailer to ordering@partnersbiz.com on
+            # 2026-09-29; the old address is kept so mails already in the window
+            # still match. Comma-separated, OR-ed in search_emails().
+            'sender': 'purchaseorder@handsontrades.com, ordering@partnersbiz.com',
             'search_term': 'GRN and reconciliation ',
             'days_back': 21,
             'max_results': 1000,
@@ -202,7 +205,11 @@ class BlinkitHOTScheduler:
             query_parts = ["has:attachment"]
             
             if sender:
-                query_parts.append(f'from:"{sender}"')
+                senders = [s.strip() for s in sender.split(",") if s.strip()]
+                if len(senders) == 1:
+                    query_parts.append(f'from:"{senders[0]}"')
+                else:
+                    query_parts.append("(" + " OR ".join(f'from:"{s}"' for s in senders) + ")")
             
             if search_term:
                 if "," in search_term:
