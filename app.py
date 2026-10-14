@@ -65,6 +65,10 @@ class BlinkitHOTScheduler:
             # 2026-09-29; the old address is kept so mails already in the window
             # still match. Comma-separated, OR-ed in search_emails().
             'sender': 'purchaseorder@handsontrades.com, ordering@partnersbiz.com',
+            # Attachments are filed under Gmail_Attachments/<sender>/<search term>/
+            # Excel_Files, and excel_config below reads ONE such folder. Pin the
+            # sender folder so a new sending address keeps landing in it.
+            'drive_sender_folder': 'purchaseorder@handsontrades.com',
             'search_term': 'GRN and reconciliation ',
             'days_back': 21,
             'max_results': 1000,
@@ -781,7 +785,8 @@ class BlinkitHOTScheduler:
                 sender_email = sender
                 if "<" in sender_email and ">" in sender_email:
                     sender_email = sender_email.split("<")[1].split(">")[0].strip()
-                sender_folder_name = self._sanitize_filename(sender_email)
+                sender_folder_name = self._sanitize_filename(
+                    config.get('drive_sender_folder') or sender_email)
                 search_term = config.get('search_term', 'all-attachments')
                 search_folder_name = search_term if search_term else "all-attachments"
                 file_type_folder = "Excel_Files"
